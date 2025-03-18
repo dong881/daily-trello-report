@@ -1,3 +1,5 @@
+const NEED_TO_DELAY = 0;
+const NEED_TO_SEND_MSG = NEED_TO_DELAY;
 /**
  * 取得必要的 Script Property，若未設定則記錄錯誤並拋出例外
  */
@@ -27,9 +29,39 @@ const TRELLO_COMMENT_BASE_URL = getRequiredProperty("TRELLO_COMMENT_BASE_URL");
 // 非必要參數
 const SEND_MSG_URL            = getOptionalProperty("SEND_MSG_URL");
 
+// const SHORT_TERM_GOAL = `
+// 	- Install and test the OAI nfapi version.
+
+// 		- Validate OAI UE + OAI L1 + nFAPI + OAI L2:
+// 			- ~~ **(Done)** Checkpoint 1: Installation and testing completed.~~ 
+// 			  → https://ntust-bmwlab.notion.site/Reproduction-OAI-nfapi-M-plane-split2-6-7-2-1b21009831438095a4adc1a6b54f195f?pvs=4
+// 			- **(DL:4/8)** Checkpoint 2: M-plane testing completed.
+
+// 		- **(DL:4/10)** Final deliverable: Installation manual. 
+// 		  → https://ntust-bmwlab.notion.site/OAI-nFAPI-E2E-1b91009831438099982fc89b740eec59?pvs=4
+
+// 	- Integrate OAI L1 + nFAPI + OSC L2.
+
+// 		- Document testing progress. 
+// 		  → https://ntust-bmwlab.notion.site/12110098314381aabfc5d15f23cc7596?v=12110098314381c69d2a000c00139d5b&pvs=4
+
+// 		- Integration OSC DU High and OAI Layer 1 
+//       → [Status diagrams](https://viewer.diagrams.net/?tags=%7B%7D&lightbox=1&highlight=0000ff&edit=_blank&layers=1&nav=1&title=nFAPI.drawio&page-id=Cxh7rBsZIl-cHQLJRT6X&dark=auto#Uhttps%3A%2F%2Fdrive.google.com%2Fuc%3Fid%3D1iXXPESGsNy2uM2wCgplps3eCRtnXG8Ts%26export%3Ddownload)
+// 		  → https://ntust-bmwlab.notion.site/nfapi-E2E-Note-1a0100983143804f8659e2c5edd5b2bc?pvs=4
+
+// 	- Thesis proposal. 
+// 	  → https://ntust-bmwlab.notion.site/Thesis-proposal-17e1009831438094a6f5d2c555a4ae3b?pvs=4
+// `;
 const SHORT_TERM_GOAL = `
-\t- Fix UE Segmentation fault after Generating RRCSetupComplete （DL: 2/28） → https://ntust-bmwlab.notion.site/UE-Segmentation-fault-after-Generating-RRCSetupComplete-12110098314381d1adf3f719885a3bf8?pvs=4
-\t- Thesis proposal. （DL: 2/24） → https://ntust-bmwlab.notion.site/Thesis-proposal-17e1009831438094a6f5d2c555a4ae3b?pvs=4
+ 	- Demo OAI nfapi version (OAI UE + OAI L1 + nFAPI + OAI L2)
+
+ 	- Milestone
+
+    - ~~ **(Done)** Checkpoint 1: Installation and testing completed. ~~
+			  → https://ntust-bmwlab.notion.site/Reproduction-OAI-nfapi-M-plane-split2-6-7-2-1b21009831438095a4adc1a6b54f195f?pvs=4
+ 		- Checkpoint 2: M-plane testing completed.
+
+ 	- Final deliverable: Installation manual.
 `;
 
 /**
@@ -251,25 +283,24 @@ function autoTrello() {
   switch (dayOfWeek) {
     case 1: // Monday
       Logger.log("Today is Monday");
-      text += "\t- 09:00~11:00 【Meeting】 BMW lab meeting\n";
-      text += generateTimeSlots(11, 11.5, tasks, 2);
+      text += generateTimeSlots(9, 11.5, tasks, 1);
       text += "\t- 11:30~12:30 Lunch Break\n";
-      text += generateTimeSlots(12.5, 13.2, tasks, 1);
+      text += generateTimeSlots(12.5, 13.2, tasks, 0);
       text += "\t- 13:20~16:20 【Course】Thesis Seminar (II) RB-105\n";
-      text += generateTimeSlots(16.5, 17, tasks, 0);
       break;
     case 2: // Tuesday
       Logger.log("Today is Tuesday");
       text += "\t- 08:10~11:10 【Course】Multimedia Wireless Networks IB-602-1\n";
       text += "\t- 11:10~12:10 Lunch Break\n";
-      text += generateTimeSlots(12.5, 13.2, tasks, 1);
-      text += "\t- 13:20~14:10 【Course】Computer Networks IB-713\n";
-      text += generateTimeSlots(14.5, 17, tasks, 0);
+      text += generateTimeSlots(12.5, 13.2, tasks, 0);
+      text += "\t- 13:20~16:20 【Course】Computer Networks IB-713\n";
+      text += "\t- 16:20~19:00 【Course】Generative AI: Text and Image Synthesis Principles and Practice\n";
       break;
     case 3: // Wednesday
       Logger.log("Today is Wednesday");
       text += "\t- 09:10~12:10 【Course】Artificial Intelligence and Deep Learning MA-303\n";
-      text += generateTimeSlots(12.5, 17, tasks, 0);
+      text += "\t- 14:00~16:00 【Meeting】 BMW lab meeting\n";
+      text += generateTimeSlots(16, 17, tasks, 0);
       break;
     case 4: // Thursday
       Logger.log("Today is Thursday");
@@ -279,7 +310,7 @@ function autoTrello() {
       break;
     case 5: // Friday
       Logger.log("Today is Friday");
-      text += generateTimeSlots(9, 11.5, tasks, 1);
+      text += "\t- 09:10~12:10 【Course】Advanced Mobile Communication System IB-602-2\n";
       text += "\t- 11:30~12:30 Lunch Break\n";
       text += generateTimeSlots(12.5, 17, tasks, 0);
       break;
@@ -305,14 +336,14 @@ function autoTrello() {
     };
     
     // 若需要隨機延遲，可啟用以下程式碼
-    // delayRandom();
+    if(NEED_TO_DELAY) delayRandom();
     
     var res = UrlFetchApp.fetch(trelloUrl, options);
     Logger.log("Trello API 回應碼: " + res.getResponseCode());
     
     var jsonResponse = JSON.parse(res.getContentText());
     var commentURL = TRELLO_COMMENT_BASE_URL + "#comment-" + jsonResponse.id;
-    SEND_MSG(commentURL);
+    if(NEED_TO_SEND_MSG) SEND_MSG(commentURL);
     Logger.log("生成的 Comment URL: " + commentURL);
   } catch (error) {
     Logger.log("Error in autoTrello: " + error);
