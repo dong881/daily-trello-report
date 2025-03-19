@@ -1,4 +1,4 @@
-const NEED_TO_DELAY = 0;
+const NEED_TO_DELAY = 1;
 const NEED_TO_SEND_MSG = NEED_TO_DELAY;
 /**
  * 取得必要的 Script Property，若未設定則記錄錯誤並拋出例外
