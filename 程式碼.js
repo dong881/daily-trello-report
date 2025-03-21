@@ -1,5 +1,3 @@
-const NEED_TO_DELAY = 1;
-const NEED_TO_SEND_MSG = NEED_TO_DELAY;
 /**
  * 取得必要的 Script Property，若未設定則記錄錯誤並拋出例外
  */
@@ -52,13 +50,16 @@ const SEND_MSG_URL            = getOptionalProperty("SEND_MSG_URL");
 // 	- Thesis proposal. 
 // 	  → https://ntust-bmwlab.notion.site/Thesis-proposal-17e1009831438094a6f5d2c555a4ae3b?pvs=4
 // `;
+const NEED_TO_DELAY = 1;
+const NEED_TO_SEND_MSG = NEED_TO_DELAY;
+
 const SHORT_TERM_GOAL = `
  	- Demo OAI nfapi version (OAI UE + OAI L1 + nFAPI + OAI L2)
 
- 	- Milestone
+ 	- Milestone\n
 
-    - ~~ **(Done)** Checkpoint 1: Installation and testing completed. ~~
-			  → https://ntust-bmwlab.notion.site/Reproduction-OAI-nfapi-M-plane-split2-6-7-2-1b21009831438095a4adc1a6b54f195f?pvs=4
+    \t- Checkpoint 1: [Installation](https://www.notion.so/ntust-bmwlab/OAI-E2E-RFsim-nFAPI-1b91009831438099982fc89b740eec59?pvs=4#1b9100983143819f936bd8924ae94a76) and [testing](https://www.notion.so/ntust-bmwlab/OAI-E2E-RFsim-nFAPI-1b91009831438099982fc89b740eec59?pvs=4#1b910098314381fa8bb8f04c1a3983b8) completed.
+
  		- Checkpoint 2: M-plane testing completed.
 
  	- Final deliverable: Installation manual.
