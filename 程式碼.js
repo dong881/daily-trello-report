@@ -62,7 +62,7 @@ const SHORT_TERM_GOAL = `
 
  		- Checkpoint 2: M-plane testing completed.
 
- 	- Final deliverable: Installation manual.
+ 	- Final deliverable: [Installation manual](https://ntust-bmwlab.notion.site/OAI-E2E-Lite-On-RU-nFAPI-1bc10098314380018955d2fdfefe1e5d?pvs=4).
 `;
 
 /**
@@ -235,7 +235,7 @@ function padZero(number) {
  */
 function delayRandom() {
   var minDelay = 0;
-  var maxDelay = 120000;
+  var maxDelay = 240000;
   var randomDelay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
   Logger.log("延遲時間 (毫秒): " + randomDelay);
   Utilities.sleep(randomDelay);
