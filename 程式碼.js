@@ -54,15 +54,15 @@ const NEED_TO_DELAY = 1;
 const NEED_TO_SEND_MSG = NEED_TO_DELAY;
 
 const SHORT_TERM_GOAL = `
- 	- Demo OAI nfapi version (OAI UE + OAI L1 + nFAPI + OAI L2)
+    - Measure End-to-End Time (RTT) and Traffic (Throughput)
 
- 	- Milestone\n
-
-    \t- Checkpoint 1: [Installation](https://www.notion.so/ntust-bmwlab/OAI-E2E-RFsim-nFAPI-1b91009831438099982fc89b740eec59?pvs=4#1b9100983143819f936bd8924ae94a76) and [testing](https://www.notion.so/ntust-bmwlab/OAI-E2E-RFsim-nFAPI-1b91009831438099982fc89b740eec59?pvs=4#1b910098314381fa8bb8f04c1a3983b8) completed.
-
- 		- Checkpoint 2: M-plane testing completed.
-
- 	- Final deliverable: [Installation manual](https://ntust-bmwlab.notion.site/OAI-E2E-Lite-On-RU-nFAPI-1bc10098314380018955d2fdfefe1e5d?pvs=4).
+    - Milestone
+      - ✅ Checkpoint 1: [Installing](https://ntust-bmwlab.notion.site/OAI-E2E-LiteOn-RU-monolithic-1d9100983143801ea26bd92233cbe71c?pvs=4 "‌") the OAI **monolithic** version (MTK UE + LiteOn RU + OAI L1 + **FAPI** + OAI L2) and [testing](https://ntust-bmwlab.notion.site/OAI-E2E-LiteOn-RU-monolithic-1d9100983143801ea26bd92233cbe71c?pvs=4 "‌") completed.
+      - ✅ Checkpoint 2: [Installing](https://ntust-bmwlab.notion.site/OAI-E2E-LiteOn-RU-nFAPI-TwoMachine-1d9100983143804cb396cff065cfcd3e?pvs=4 "‌") the OAI **nFAPI** version (MTK UE + LiteOn RU + OAI L1 + **nFAPI** + OAI L2) in t**wo machine** and [testing](https://www.notion.so/ntust-bmwlab/OAI-E2E-LiteOn-RU-nFAPI-TwoMachine-1d9100983143804cb396cff065cfcd3e?pvs=4#1d91009831438152a165fe65f9e1e761 "‌") completed.
+        - [issues and solution](https://ntust-bmwlab.notion.site/Two-machine-nFAPI-121100983143811ca94cfa87f9b7d1fa?pvs=4 "‌")
+      - **Checkpoint 3:** Develop an automated data collection script
+        **Checkpoint 4:** Develop Python code for data analysis and visualization
+    - Final deliverable: Installation manual by link.
 `;
 
 /**
@@ -284,9 +284,8 @@ function autoTrello() {
   switch (dayOfWeek) {
     case 1: // Monday
       Logger.log("Today is Monday");
-      text += generateTimeSlots(9, 11.5, tasks, 1);
+      text += generateTimeSlots(9, 11.5, tasks, 0);
       text += "\t- 11:30~12:30 Lunch Break\n";
-      text += generateTimeSlots(12.5, 13.2, tasks, 0);
       text += "\t- 13:20~16:20 【Course】Thesis Seminar (II) RB-105\n";
       break;
     case 2: // Tuesday
