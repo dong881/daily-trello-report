@@ -57,11 +57,11 @@ const SHORT_TERM_GOAL = `
     - Measure End-to-End Time (RTT) and Traffic (Throughput)
 
     - Milestone
-      - ✅ Checkpoint 1: [Installing](https://ntust-bmwlab.notion.site/OAI-E2E-LiteOn-RU-monolithic-1d9100983143801ea26bd92233cbe71c?pvs=4 "‌") the OAI **monolithic** version (MTK UE + LiteOn RU + OAI L1 + **FAPI** + OAI L2) and [testing](https://ntust-bmwlab.notion.site/OAI-E2E-LiteOn-RU-monolithic-1d9100983143801ea26bd92233cbe71c?pvs=4 "‌") completed.
-      - ✅ Checkpoint 2: [Installing](https://ntust-bmwlab.notion.site/OAI-E2E-LiteOn-RU-nFAPI-TwoMachine-1d9100983143804cb396cff065cfcd3e?pvs=4 "‌") the OAI **nFAPI** version (MTK UE + LiteOn RU + OAI L1 + **nFAPI** + OAI L2) in t**wo machine** and [testing](https://www.notion.so/ntust-bmwlab/OAI-E2E-LiteOn-RU-nFAPI-TwoMachine-1d9100983143804cb396cff065cfcd3e?pvs=4#1d91009831438152a165fe65f9e1e761 "‌") completed.
-        - [issues and solution](https://ntust-bmwlab.notion.site/Two-machine-nFAPI-121100983143811ca94cfa87f9b7d1fa?pvs=4 "‌")
-      - **Checkpoint 3:** Develop an automated data collection script
-        **Checkpoint 4:** Develop Python code for data analysis and visualization
+      - ✅ Checkpoint 1: [Installing](https://ntust-bmwlab.notion.site/OAI-E2E-SuperMicro-Metanoia-JuraRU-monolithic-1e310098314380a6ae9cc4dc9b639b7b?pvs=4"‌") the OAI **monolithic** version (MTK UE + MetaNoia Jura RU + OAI L1 + **FAPI** + OAI L2) and [testing](https://www.notion.so/ntust-bmwlab/OAI-E2E-SuperMicro-Metanoia-JuraRU-monolithic-1e310098314380a6ae9cc4dc9b639b7b?pvs=4#1e3100983143811d9e80ed7c086963c6 "‌") completed.
+      - ✅ Checkpoint 2: [Installing](https://ntust-bmwlab.notion.site/OAI-E2E-SuperMicro-Metanoia-Jura-RU-nFAPI-TwoMachine-1e3100983143800bb931f18fb6c365cb?pvs=4 "‌") the OAI **nFAPI** version (MTK UE + MetaNoia Jura RU + OAI L1 + **nFAPI** + OAI L2) in t**wo machine** and [testing](https://www.notion.so/ntust-bmwlab/OAI-E2E-SuperMicro-Metanoia-Jura-RU-nFAPI-TwoMachine-1e3100983143800bb931f18fb6c365cb?pvs=4#1e3100983143819bb25bde0617c32fbd "‌") completed.
+        - [issues and solution](https://www.notion.so/ntust-bmwlab/OAI-E2E-SuperMicro-Metanoia-Jura-RU-nFAPI-TwoMachine-1e3100983143800bb931f18fb6c365cb?pvs=4#1ea1009831438053b67cdb29c0ccbcaa "‌")
+      - ✅ Checkpoint 3: [Develop an automated data collection script](https://github.com/bmw-ece-ntust/Ming-E2E-Network-Measurement/tree/master?tab=readme-ov-file#e2e-network-measurement)
+      - ✅ Checkpoint 4: [Develop Python code for data analysis and visualization](https://github.com/bmw-ece-ntust/Ming-E2E-Network-Measurement/tree/master?tab=readme-ov-file#data-analysis)
     - Final deliverable: Installation manual by link.
 `;
 
@@ -292,7 +292,7 @@ function autoTrello() {
       Logger.log("Today is Tuesday");
       text += "\t- 08:10~11:10 【Course】Multimedia Wireless Networks IB-602-1\n";
       text += "\t- 11:10~12:10 Lunch Break\n";
-      text += generateTimeSlots(12.5, 13.2, tasks, 0);
+      // text += generateTimeSlots(12.5, 13.2, tasks, 0);
       text += "\t- 13:20~16:20 【Course】Computer Networks IB-713\n";
       text += "\t- 16:20~19:00 【Course】Generative AI: Text and Image Synthesis Principles and Practice\n";
       break;
