@@ -28,40 +28,26 @@ const TRELLO_COMMENT_BASE_URL = getRequiredProperty("TRELLO_COMMENT_BASE_URL");
 const SEND_MSG_URL            = getOptionalProperty("SEND_MSG_URL");
 
 // const SHORT_TERM_GOAL = `
-// 	- Install and test the OAI nfapi version.
+//     - Measure End-to-End Time (RTT) and Traffic (Throughput)
 
-// 		- Validate OAI UE + OAI L1 + nFAPI + OAI L2:
-// 			- ~~ **(Done)** Checkpoint 1: Installation and testing completed.~~ 
-// 			  → https://ntust-bmwlab.notion.site/Reproduction-OAI-nfapi-M-plane-split2-6-7-2-1b21009831438095a4adc1a6b54f195f?pvs=4
-// 			- **(DL:4/8)** Checkpoint 2: M-plane testing completed.
-
-// 		- **(DL:4/10)** Final deliverable: Installation manual. 
-// 		  → https://ntust-bmwlab.notion.site/OAI-nFAPI-E2E-1b91009831438099982fc89b740eec59?pvs=4
-
-// 	- Integrate OAI L1 + nFAPI + OSC L2.
-
-// 		- Document testing progress. 
-// 		  → https://ntust-bmwlab.notion.site/12110098314381aabfc5d15f23cc7596?v=12110098314381c69d2a000c00139d5b&pvs=4
-
-// 		- Integration OSC DU High and OAI Layer 1 
-//       → [Status diagrams](https://viewer.diagrams.net/?tags=%7B%7D&lightbox=1&highlight=0000ff&edit=_blank&layers=1&nav=1&title=nFAPI.drawio&page-id=Cxh7rBsZIl-cHQLJRT6X&dark=auto#Uhttps%3A%2F%2Fdrive.google.com%2Fuc%3Fid%3D1iXXPESGsNy2uM2wCgplps3eCRtnXG8Ts%26export%3Ddownload)
-// 		  → https://ntust-bmwlab.notion.site/nfapi-E2E-Note-1a0100983143804f8659e2c5edd5b2bc?pvs=4
-
-// 	- Thesis proposal. 
-// 	  → https://ntust-bmwlab.notion.site/Thesis-proposal-17e1009831438094a6f5d2c555a4ae3b?pvs=4
+//     - Milestone
+//       - ✅ Checkpoint 1: [Installing](https://ntust-bmwlab.notion.site/OAI-E2E-SuperMicro-Metanoia-JuraRU-monolithic-1e310098314380a6ae9cc4dc9b639b7b?pvs=4"‌") the OAI **monolithic** version (MTK UE + MetaNoia Jura RU + OAI L1 + **FAPI** + OAI L2) and [testing](https://www.notion.so/ntust-bmwlab/OAI-E2E-SuperMicro-Metanoia-JuraRU-monolithic-1e310098314380a6ae9cc4dc9b639b7b?pvs=4#1e3100983143811d9e80ed7c086963c6 "‌") completed.
+//       - ✅ Checkpoint 2: [Installing](https://ntust-bmwlab.notion.site/OAI-E2E-SuperMicro-Metanoia-Jura-RU-nFAPI-TwoMachine-1e3100983143800bb931f18fb6c365cb?pvs=4 "‌") the OAI **nFAPI** version (MTK UE + MetaNoia Jura RU + OAI L1 + **nFAPI** + OAI L2) in t**wo machine** and [testing](https://www.notion.so/ntust-bmwlab/OAI-E2E-SuperMicro-Metanoia-Jura-RU-nFAPI-TwoMachine-1e3100983143800bb931f18fb6c365cb?pvs=4#1e3100983143819bb25bde0617c32fbd "‌") completed.
+//         - [issues and solution](https://www.notion.so/ntust-bmwlab/OAI-E2E-SuperMicro-Metanoia-Jura-RU-nFAPI-TwoMachine-1e3100983143800bb931f18fb6c365cb?pvs=4#1ea1009831438053b67cdb29c0ccbcaa "‌")
+//       - ✅ Checkpoint 3: [Develop an automated data collection script](https://github.com/bmw-ece-ntust/Ming-E2E-Network-Measurement/tree/master?tab=readme-ov-file#e2e-network-measurement)
+//       - ✅ Checkpoint 4: [Develop Python code for data analysis and visualization](https://github.com/bmw-ece-ntust/Ming-E2E-Network-Measurement/tree/master?tab=readme-ov-file#data-analysis)
+//     - Final deliverable: Installation manual by link.
 // `;
-const NEED_TO_DELAY = 1;
+
+const NEED_TO_DELAY = 0;
 const NEED_TO_SEND_MSG = NEED_TO_DELAY;
 
 const SHORT_TERM_GOAL = `
-    - Measure End-to-End Time (RTT) and Traffic (Throughput)
+    - Complete the introduction section of the thesis.
 
-    - Milestone
-      - ✅ Checkpoint 1: [Installing](https://ntust-bmwlab.notion.site/OAI-E2E-SuperMicro-Metanoia-JuraRU-monolithic-1e310098314380a6ae9cc4dc9b639b7b?pvs=4"‌") the OAI **monolithic** version (MTK UE + MetaNoia Jura RU + OAI L1 + **FAPI** + OAI L2) and [testing](https://www.notion.so/ntust-bmwlab/OAI-E2E-SuperMicro-Metanoia-JuraRU-monolithic-1e310098314380a6ae9cc4dc9b639b7b?pvs=4#1e3100983143811d9e80ed7c086963c6 "‌") completed.
-      - ✅ Checkpoint 2: [Installing](https://ntust-bmwlab.notion.site/OAI-E2E-SuperMicro-Metanoia-Jura-RU-nFAPI-TwoMachine-1e3100983143800bb931f18fb6c365cb?pvs=4 "‌") the OAI **nFAPI** version (MTK UE + MetaNoia Jura RU + OAI L1 + **nFAPI** + OAI L2) in t**wo machine** and [testing](https://www.notion.so/ntust-bmwlab/OAI-E2E-SuperMicro-Metanoia-Jura-RU-nFAPI-TwoMachine-1e3100983143800bb931f18fb6c365cb?pvs=4#1e3100983143819bb25bde0617c32fbd "‌") completed.
-        - [issues and solution](https://www.notion.so/ntust-bmwlab/OAI-E2E-SuperMicro-Metanoia-Jura-RU-nFAPI-TwoMachine-1e3100983143800bb931f18fb6c365cb?pvs=4#1ea1009831438053b67cdb29c0ccbcaa "‌")
-      - ✅ Checkpoint 3: [Develop an automated data collection script](https://github.com/bmw-ece-ntust/Ming-E2E-Network-Measurement/tree/master?tab=readme-ov-file#e2e-network-measurement)
-      - ✅ Checkpoint 4: [Develop Python code for data analysis and visualization](https://github.com/bmw-ece-ntust/Ming-E2E-Network-Measurement/tree/master?tab=readme-ov-file#data-analysis)
+    - **Milestone**
+      - Checkpoint 1: Introduction ORAN.
+      - Checkpoint 2: Introduction FAPI/nFAPI.
     - Final deliverable: Installation manual by link.
 `;
 
@@ -284,35 +270,25 @@ function autoTrello() {
   switch (dayOfWeek) {
     case 1: // Monday
       Logger.log("Today is Monday");
-      text += generateTimeSlots(9, 11.5, tasks, 0);
-      text += "\t- 11:30~12:30 Lunch Break\n";
-      text += "\t- 13:20~16:20 【Course】Thesis Seminar (II) RB-105\n";
+      text += generateTimeSlots(9, 17, tasks, 0);
       break;
     case 2: // Tuesday
       Logger.log("Today is Tuesday");
-      text += "\t- 08:10~11:10 【Course】Multimedia Wireless Networks IB-602-1\n";
-      text += "\t- 11:10~12:10 Lunch Break\n";
-      // text += generateTimeSlots(12.5, 13.2, tasks, 0);
-      text += "\t- 13:20~16:20 【Course】Computer Networks IB-713\n";
-      text += "\t- 16:20~19:00 【Course】Generative AI: Text and Image Synthesis Principles and Practice\n";
+      text += generateTimeSlots(9, 17, tasks, 0);
       break;
     case 3: // Wednesday
       Logger.log("Today is Wednesday");
-      text += "\t- 09:10~12:10 【Course】Artificial Intelligence and Deep Learning MA-303\n";
+      text += generateTimeSlots(9, 12, tasks, 1);
       text += "\t- 14:00~16:00 【Meeting】 BMW lab meeting\n";
       text += generateTimeSlots(16, 17, tasks, 0);
       break;
     case 4: // Thursday
       Logger.log("Today is Thursday");
-      text += generateTimeSlots(9, 11.5, tasks, 1);
-      text += "\t- 11:30~12:30 Lunch Break\n";
-      text += generateTimeSlots(12.5, 17, tasks, 0);
+      text += generateTimeSlots(9, 17, tasks, 0);
       break;
     case 5: // Friday
       Logger.log("Today is Friday");
-      text += "\t- 09:10~12:10 【Course】Advanced Mobile Communication System IB-602-2\n";
-      text += "\t- 11:30~12:30 Lunch Break\n";
-      text += generateTimeSlots(12.5, 17, tasks, 0);
+      text += generateTimeSlots(9, 17, tasks, 0);
       break;
     default:
       Logger.log("週末或未定義時段，autoTrello 結束執行。");
