@@ -36,11 +36,12 @@ const LAB_MEETING_START = "09:00";
 const LAB_MEETING_END   = "11:00";
 
 const SHORT_TERM_GOAL = `
-- Complete the introduction section of the thesis.
+- Begin drafting the research motivation, challenges, and contributions of the thesis.
 
 - **Milestone**
-  - Checkpoint 1: Introduction ORAN.
-  - Checkpoint 2: Introduction FAPI/nFAPI.
+  - Checkpoint 1: research motivation
+  - Checkpoint 2: research challenges
+  - Checkpoint 3: research contributions
 - Final deliverable: Installation manual by link.
 `;
 
@@ -123,12 +124,12 @@ function generateDailySlots(todayDayOfWeek, meetingDay) {
   let t = start;
   while (t < end) {
     if (t === lunchStart) {
-      slots.push({ startMins: lunchStart, endMins: lunchEnd, display: `${minutesToHHMM(lunchStart)}~${minutesToHHMM(lunchEnd)} Lunch Break` });
+      slots.push({ startMins: lunchStart, endMins: lunchEnd, display: `Lunch Break` });
       t = lunchEnd;
       continue;
     }
     if (todayDayOfWeek === meetingDay && t === meetingStart) {
-      slots.push({ startMins: meetingStart, endMins: meetingEnd, display: `${minutesToHHMM(meetingStart)}~${minutesToHHMM(meetingEnd)} BMW lab meeting` });
+      slots.push({ startMins: meetingStart, endMins: meetingEnd, display: `BMW lab meeting` });
       t = meetingEnd;
       continue;
     }
