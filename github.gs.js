@@ -1,7 +1,7 @@
 /*********************************
  * Multi-API + Smart Linking + Periodic Slot
  * Language: Apps Script (GAS JavaScript)
- * Version: 2.4 (Revert to Objective Statements)
+ * Version: 2.5 (Bubble List Format Update)
  *********************************/
 
 // ==== Script Properties ====
@@ -241,8 +241,8 @@ You are a highly efficient scheduling assistant. Your task is to plan a day for 
 - Your goal is to create a logical flow for the day, where tasks build upon each other.
 - Base these tasks primarily on the **Available Sections** provided for each note.
 
-- GOOD:   - "09:00~10:00 Draft the 'research motivation' section for the thesis."
-- GOOD:   - "10:00~11:00 Outline the 'research challenges' based on the completed motivation."
+- GOOD: "09:00~10:00 Draft the 'research motivation' section for the thesis."
+- GOOD: "10:00~11:00 Outline the 'research challenges' based on the completed motivation."
 - BAD: "09:00~10:00 research motivation" (This is too short)
 - BAD: "09:00~10:00 I will draft the research motivation." (This is first-person)
 
@@ -262,11 +262,11 @@ ${taskList}
 Now generate today's hourly plan, in ENGLISH, starting with the first slot.
 One line per slot, in order.
 Use the template:
-  - HH:MM~HH:MM [Direct, objective task for this hour]
+HH:MM~HH:MM [Direct, objective task for this hour]
 Or
-  - HH:MM~HH:MM [description of fixed event]
+HH:MM~HH:MM [description of fixed event]
 Or
-  - HH:MM~HH:MM      (for empty slots need to merge with last slot time)
+HH:MM~HH:MM      (for empty slots need to merge with last slot time)
   `.replace(/^\s+/gm, '');
 
   const GEMINI_MODEL = "gemini-2.5-flash";
@@ -341,7 +341,7 @@ function assignMicroTasksToSlots(slots, notes) {
 }
 
 
-// ==== Compose the hourly plan: LLM then fallback + smart link ====
+// ==== Compose the hourly plan: LLM then fallback + smart link + BUBBLE LIST FORMAT ====
 function generateHourlyPlanAll(tasks, todayDayOfWeek) {
   const slots = generateDailySlots(todayDayOfWeek);
   let planRaw = generatePlanViaGeminiAll(tasks, slots);
@@ -351,18 +351,26 @@ function generateHourlyPlanAll(tasks, todayDayOfWeek) {
     planLines = planRaw.split('\n').filter(l => l.match(/^\d{2}:\d{2}~\d{2}:\d{2}/));
   }
   
-  // 若格式數目OK，進行智能連結 (使用新的 "append"  logique)
+  let finalPlanLines = [];
+
+  // 若格式數目OK，進行智能連結
   if (planLines.length === slots.length) {
     Logger.log("Using Gemini plan. Attaching links...");
-    return attachRelevantLink(planLines.join('\n'), tasks);
+    // attachRelevantLink returns a single string, we split it back to array
+    const linkedText = attachRelevantLink(planLines.join('\n'), tasks);
+    finalPlanLines = linkedText.split('\n');
+  } else {
+    // fallback deterministic
+    Logger.log(`Gemini plan failed or invalid. Using fallback.`);
+    finalPlanLines = assignMicroTasksToSlots(slots, tasks);
   }
-  
-  // fallback deterministic (使用新的 "append" Logic)
-  Logger.log(`Gemini plan failed or invalid. (Expected ${slots.length} lines, Got ${planLines.length}). Using fallback micro-task assigner.`);
-  return assignMicroTasksToSlots(slots, tasks).join('\n');
+
+  // **IMPORTANT MODIFICATION**: Convert lines to Bubble List Format
+  // Add tab + bullet point to each line
+  return finalPlanLines.map(line => `\t- ${line}`).join('\n');
 }
 
-// ==== MODIFIED: Main autoTrello Scheduler (Retry logic) ====
+// ==== MODIFIED: Main autoTrello Scheduler (Retry logic + Format) ====
 function autoTrello() {
   var today = new Date();
   var formattedDate = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy/MM/dd');
@@ -386,24 +394,20 @@ function autoTrello() {
     if (tasks.length === 0) {
       Logger.log(`No API notes found for ${daysToFetch} days. Trying ${daysToFetch + 1} days...`);
       daysToFetch++;
-      // Optional: add a small delay if API rate limit is a concern
-      // Utilities.sleep(1000); 
     }
   }
 
   // After loop, check if tasks are still empty
   if (tasks.length === 0) {
     Logger.log(`No API notes found even after checking ${maxFetchDays} days. autoTrello ends.`);
-    // You could send an alert here if needed
-    // if (SEND_MSG_URL) SEND_MSG(`autoTrello Alert: No notes found in the last ${maxFetchDays} days.`);
     return;
   }
   
   Logger.log(`Successfully fetched ${tasks.length} notes from the last ${daysToFetch} days.`);
-  // End of modification
-
+  
   var hourlyPlan = generateHourlyPlanAll(tasks, dayOfWeek);
   
+  // **MODIFICATION**: Use the exact requested text template
   var text = `
 **${formattedDate} (${dayNames[dayOfWeek]})**
 - ---
