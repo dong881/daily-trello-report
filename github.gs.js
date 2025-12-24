@@ -1,22 +1,23 @@
 /*********************************
- *  Multi-API + Smart Linking + Periodic Slot
- *  Language: Apps Script (GAS JavaScript)
+ * Multi-API + Smart Linking + Periodic Slot
+ * Language: Apps Script (GAS JavaScript)
+ * Version: 2.4 (Revert to Objective Statements)
  *********************************/
 
 // ==== Script Properties ====
-const TRELLO_API_KEY           = getRequiredProperty("TRELLO_API_KEY");
-const TRELLO_API_TOKEN         = getRequiredProperty("TRELLO_API_TOKEN");
-const TRELLO_COMMENT_BASE_URL  = getRequiredProperty("TRELLO_COMMENT_BASE_URL");
-const GEMINI_API_TOKEN         = getRequiredProperty("GEMINI_API_KEY");
-const SEND_MSG_URL             = getOptionalProperty("SEND_MSG_URL");
-const MING_NOTE_API_BASE       = "https://ming-note.vercel.app/api/daily-report";
+const TRELLO_API_KEY          = getRequiredProperty("TRELLO_API_KEY");
+const TRELLO_API_TOKEN        = getRequiredProperty("TRELLO_API_TOKEN");
+const TRELLO_COMMENT_BASE_URL = getRequiredProperty("TRELLO_COMMENT_BASE_URL");
+const GEMINI_API_TOKEN        = getRequiredProperty("GEMINI_API_KEY");
+const SEND_MSG_URL            = getOptionalProperty("SEND_MSG_URL");
+const MING_NOTE_API_BASE      = "https://ming-note.vercel.app/api/daily-report";
 
 // ==== Periodic Meeting/Slot Config ====
-const LAB_MEETING_DAY   = 3; // Wednesday
-const LAB_MEETING_START = "09:00";
-const LAB_MEETING_END   = "11:00";
-const labMeetingStart   = 9 * 60;
-const labMeetingEnd     = 11 * 60;
+const LAB_MEETING_DAY     = 3; // Wednesday
+const LAB_MEETING_START   = "09:00";
+const LAB_MEETING_END     = "11:00";
+const labMeetingStart     = 9 * 60;
+const labMeetingEnd       = 11 * 60;
 
 const PROF_RAY_MEETING_DAY = 1; // Monday
 const PROF_RAY_MEETING_START_MINS = 14 * 60;
@@ -45,34 +46,48 @@ function getOptionalProperty(key) {
   return PropertiesService.getScriptProperties().getProperty(key);
 }
 
-// ==== Fetch Daily Report Notes from API ====
-function fetchTasksFromNoteAPI(days = 1, status = "all", tags = null) {
+// ==== MODIFIED: Fetch Daily Report Notes from API (with emoji filter) ====
+function fetchTasksFromNoteAPI(days = 3, status = "all", tags = null) {
   let url = `${MING_NOTE_API_BASE}?days=${days}`;
+  console.log(url);
   if (status !== 'all') url += `&status=${status}`;
   if (tags && tags.length) url += `&tags=${encodeURIComponent(tags.join(','))}`;
   try {
     let response = UrlFetchApp.fetch(url);
     let data = JSON.parse(response.getContentText());
     if (data.success && Array.isArray(data.data)) {
-      // 為每一筆 note 展開所有 section，形成 "可連結資料"
-      return data.data.map(note => {
-        // 主筆記本身可以點（無 section 時使用）
-        let base = {
-          title: note.noteName || "",
-          summary: note.metadata.summary || "No summary",
-          link: note.noteLink || "",
-          sections: note.sections || [],
-          tags: note.metadata.tags || []
-        };
-        // 每個 section 也保留標題、超連結
-        if (base.sections.length) {
-          base.sections = base.sections.map(s => ({
-            title: s.title || "",
-            link: s.link || base.link
-          }));
-        }
-        return base;
-      });
+      
+      // **MODIFICATION**: Regex to remove common emojis
+      const emojiRegex = /([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g;
+
+      return data.data
+        .filter(note => !(note.note && note.note.startsWith("notes/Meeting-Minutes/")))
+        .map(note => {
+          let base = {
+            title: note.noteName || "",
+            summary: note.metadata.summary || "No summary",
+            link: note.noteLink || "",
+            sections: note.sections || [],
+            tags: note.metadata.tags || []
+          };
+          
+          if (base.sections.length) {
+            base.sections = base.sections.map(s => {
+              // **MODIFICATION**: Clean emojis from section links
+              let cleanedLink = s.link || base.link;
+              if (cleanedLink) {
+                cleanedLink = cleanedLink.replace(emojiRegex, '');
+                // Also remove hyphen after hash, e.g. #📋-overview -> #-overview -> #overview
+                cleanedLink = cleanedLink.replace(/#-/g, '#');
+              }
+              return {
+                title: s.title || "",
+                link: cleanedLink // Use the cleaned link
+              };
+            });
+          }
+          return base;
+        });
     }
     return [];
   } catch (error) {
@@ -141,95 +156,146 @@ function buildMicroTasksFromAPI(notes) {
   return microTasks;
 }
 
+// ==== MODIFIED: attachRelevantLink (Append link at the end) ====
 // 核心：match output to optimal link（LLM或fallback都用這個包）
 function attachRelevantLink(planText, notes) {
-  // 先建立所有 section 連結的 quick 查表
+  // 1. 建立所有 section 和 note 連結的 quick 查表
   let candidates = [];
   notes.forEach(note => {
+    // 優先加入 Sections
     if (note.sections && note.sections.length) {
       note.sections.forEach(sec => {
-        candidates.push({ title: sec.title, link: sec.link });
+        if (sec.title && sec.link) { // 確保有標題和連結
+          candidates.push({ title: sec.title, link: sec.link });
+        }
       });
     }
+    // 加入 Note 本身 (作為 fallback)
     if (note.title && note.link) {
       candidates.push({ title: note.title, link: note.link });
     }
   });
 
-  // 每行處理：如有標題相關字串即加 link → [text](link)
+  // 2. 依標題長度排序 (最長的優先匹配，以提高準確性)
+  candidates.sort((a, b) => b.title.length - a.title.length);
+
+  // 3. 處理每一行 plan
   return planText.split('\n').map(line => {
-    let trimmed = line.trim();
-    let assigned = false;
-    // 只對 "HH:MM~HH:MM ......" 類型處理
-    if (!trimmed.match(/^\d{2}:\d{2}~\d{2}:\d{2}/)) return line;
-    // 對每個 candidate, 最長標題優先
-    for (let cand of candidates.sort((a,b)=>b.title.length-a.title.length)) {
-      if (cand.title && trimmed.toLowerCase().includes(cand.title.toLowerCase()) && cand.link) {
-        // 規則：只替出現關鍵字內容加 link，不蓋全部行
-        const anchor = `[${cand.title}](${cand.link})`;
-        // 用 title 第一次出現的位置替換
-        const re = new RegExp(cand.title, "i");
-        let lined = line.replace(re, anchor);
-        assigned = true;
-        return lined;
+    let trimmedLine = line.trim();
+    
+    // 只處理 "HH:MM~HH:MM ......" 類型的行
+    if (!trimmedLine.match(/^\d{2}:\d{2}~\d{2}:\d{2}/)) {
+      return line; // 非任務行 (例如標題或空行)
+    }
+
+    // 檢查是否已經有 [Link](...)
+    if (trimmedLine.match(/\[.*?\]\(.*?\)/)) {
+      return line; // 已經有連結，不再處理
+    }
+    
+    // 檢查是否為固定行程 (e.g., Lunch, Meeting) 或空行
+    if (!trimmedLine.match(/^\d{2}:\d{2}~\d{2}:\d{2}\s+.+/)) {
+        return line; // 空的 slot，不用加 link
+    }
+
+    // 尋找最匹配的 candidate
+    for (let cand of candidates) {
+      // 檢查標題是否存在於行內 (不分大小寫)
+      if (cand.title && cand.title.length > 1 && trimmedLine.toLowerCase().includes(cand.title.toLowerCase())) {
+        // 找到了！在行尾加上連結
+        // trim() 確保沒有多餘的尾隨空格
+        return `${line.trim()} [Link](${cand.link})`;
       }
     }
+    
+    // 沒找到匹配的 candidate
     return line;
   }).join('\n');
 }
 
-// ==== Gemini LLM Generate Hourly Plan, plain, then attach link ====
+
+// ==== MODIFIED: generatePlanViaGeminiAll (Objective Prompt) ====
 function generatePlanViaGeminiAll(tasks, slots) {
   if (!GEMINI_API_TOKEN) return null;
-  const slotTemplate = slots.map(slot=>
+  
+  const slotTemplate = slots.map(slot =>
     `${minutesToHHMM(slot.startMins)}~${minutesToHHMM(slot.endMins)}${slot.display ? " " + slot.display : ""}`
   ).join("\n");
-  const taskList = tasks.map(t=>`Title: ${t.title}\nSummary: ${t.summary}\nLink: ${t.link}`).join("\n\n");
+
+  const taskList = tasks.map(t => {
+    let noteInfo = `Note Title: ${t.title}\nNote Summary: ${t.summary}\nNote Link: ${t.link}`;
+    if (t.sections && t.sections.length > 0) {
+      const sectionList = t.sections.map(s => `- Section: "${s.title}" (Link: ${s.link})`).join("\n");
+      noteInfo += `\nAvailable Sections:\n${sectionList}`;
+    }
+    return noteInfo;
+  }).join("\n\n");
+
+  // **MODIFICATION**: New objective prompt
   const prompt = `
-You are an assistant who schedules highly specific 1-hour tasks for an engineering graduate student based on daily API notes/tasks.
-Today's available time slots are listed in order (see below).
-Some slots are already fixed for recurring events (meetings, lunch, routine events); their contents must be kept as is.
-You must assign the remaining open slots by distributing the provided API note items as concretely as possible without vague/general lines.
-Each line must correspond to ONE slot in the given order, and the total lines must equal the number of slots.
-You may split an API task into several micro-actions across several hours, but each slot's content must differ and be actionable.
-If there are not enough API note items to fill, leave the remaining slots BLANK (write just the time range).
-Prohibited: Adding extra slots, repeating the same content, using placeholder words like 'buffer', 'review', 'admin', or summarizing lines.
-Output only the lines, nothing else, and in the same line order as the time slots.
+You are a highly efficient scheduling assistant. Your task is to plan a day for an engineering graduate student using simple, direct, and objective statements.
+
+**Crucial Instruction 1: Task Description:**
+- You MUST use actionable, direct statements. (e.g., "Draft the...", "Review the...", "Continue outlining...").
+- DO NOT use the first person (e.g., "I will...", "I'll...", "My plan is...").
+- Your goal is to create a logical flow for the day, where tasks build upon each other.
+- Base these tasks primarily on the **Available Sections** provided for each note.
+
+- GOOD:   - "09:00~10:00 Draft the 'research motivation' section for the thesis."
+- GOOD:   - "10:00~11:00 Outline the 'research challenges' based on the completed motivation."
+- BAD: "09:00~10:00 research motivation" (This is too short)
+- BAD: "09:00~10:00 I will draft the research motivation." (This is first-person)
+
+**Crucial Instruction 2: Strict Formatting (Absolutely Required):**
+You MUST output exactly one line for *every* slot provided in the "Slot list." The total number of output lines MUST equal the total number of slot lines.
+- Keep fixed events (meetings, lunch) exactly as they are.
+- If there are not enough API items/sections to fill, you MUST still output the time range for that slot, but leave the description blank. (e.g., "16:00~17:00")
+- DO NOT add any extra text, headers, summaries, or conversational lines before or after the plan. Your output must start *immediately* with the first time slot.
+- Prohibited: Repeating content, placeholder words ('buffer', 'admin'), or summarizing lines.
 
 Slot list:
 ${slotTemplate}
 
-API items (Title / Summary / Link):
+API items (Notes and their Available Sections):
 ${taskList}
 
-Now generate today's hourly plan lines in ENGLISH, one for each slot, in order.
+Now generate today's hourly plan, in ENGLISH, starting with the first slot.
+One line per slot, in order.
 Use the template:
-HH:MM~HH:MM Description (refer to API task title/section if possible)
+  - HH:MM~HH:MM [Direct, objective task for this hour]
 Or
-HH:MM~HH:MM [description of fixed event]
+  - HH:MM~HH:MM [description of fixed event]
 Or
-HH:MM~HH:MM        (leave blank if no item to assign)
+  - HH:MM~HH:MM      (for empty slots need to merge with last slot time)
   `.replace(/^\s+/gm, '');
+
   const GEMINI_MODEL = "gemini-2.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_TOKEN}`;
   const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
   const options = { method: "post", contentType: "application/json", payload: JSON.stringify(payload), muteHttpExceptions: true };
+  
   try {
     const response = UrlFetchApp.fetch(url, options);
     const json = JSON.parse(response.getContentText());
     const planText = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     return planText.trim();
   } catch (err) {
-    Logger.log("Error calling Gemini: " + err);
+    // Log the actual response text if it's not JSON
+    if (err.message && err.message.includes("not valid JSON")) {
+        Logger.log("Gemini API did not return valid JSON. Response text: " + err);
+    } else {
+        Logger.log("Error calling Gemini: " + err);
+    }
     return null;
   }
 }
 
-// ==== Microtask fallback (text, smart-link) ====
+// ==== MODIFIED: assignMicroTasksToSlots (Append link at the end) ====
 function assignMicroTasksToSlots(slots, notes) {
   const microTasks = buildMicroTasksFromAPI(notes);
   const assigned = [];
   let poolIdx = 0;
+  
   for (let i = 0; i < slots.length; i++) {
     const slot = slots[i];
     if (slot.display) {
@@ -240,7 +306,8 @@ function assignMicroTasksToSlots(slots, notes) {
       assigned.push({ time: `${minutesToHHMM(slot.startMins)}~${minutesToHHMM(slot.endMins)}`, desc: "" });
     } else {
       const task = microTasks[poolIdx];
-      assigned.push({ time: `${minutesToHHMM(slot.startMins)}~${minutesToHHMM(slot.endMins)}`,
+      assigned.push({ 
+        time: `${minutesToHHMM(slot.startMins)}~${minutesToHHMM(slot.endMins)}`,
         desc: task.text,
         match: task.match,
         link: task.link
@@ -248,52 +315,95 @@ function assignMicroTasksToSlots(slots, notes) {
       poolIdx++;
     }
   }
+  
   // 避免重複
   const seen = {};
   for (let i = 0; i < assigned.length; i++) {
-    if (assigned[i].desc && seen[assigned[i].desc]) assigned[i].desc += " (continue/refine)";
-    else if (assigned[i].desc) seen[assigned[i].desc] = true;
+    if (assigned[i].desc && seen[assigned[i].desc]) {
+      assigned[i].desc += " (continue/refine)";
+    } else if (assigned[i].desc) {
+      seen[assigned[i].desc] = true;
+    }
   }
-  // form lines
-  return assigned.map(a =>
-    a.desc
-      ? (a.link && a.match && (a.match.some(str => a.desc.includes(str))) ?
-        `${a.time} [${a.desc}](${a.link})` :
-        `${a.time} ${a.desc}`
-        )
-      : `${a.time}`
-  );
+
+  // **MODIFICATION**: form lines (append link at the end)
+  return assigned.map(a => {
+    if (!a.desc) {
+      return a.time; // 空白時段
+    }
+    if (a.link) {
+      // 直接在後面加上 [Link]
+      return `${a.time} ${a.desc} [Link](${a.link})`;
+    }
+    // 沒有 link (例如固定行程)
+    return `${a.time} ${a.desc}`;
+  });
 }
+
 
 // ==== Compose the hourly plan: LLM then fallback + smart link ====
 function generateHourlyPlanAll(tasks, todayDayOfWeek) {
   const slots = generateDailySlots(todayDayOfWeek);
   let planRaw = generatePlanViaGeminiAll(tasks, slots);
   let planLines = [];
-  if (planRaw) planLines = planRaw.split('\n').filter(l=>l.match(/^\d{2}:\d{2}~\d{2}:\d{2}/));
-  // 若格式數目OK，進行智能連結
-  if (planLines.length === slots.length)
+  
+  if (planRaw) {
+    planLines = planRaw.split('\n').filter(l => l.match(/^\d{2}:\d{2}~\d{2}:\d{2}/));
+  }
+  
+  // 若格式數目OK，進行智能連結 (使用新的 "append"  logique)
+  if (planLines.length === slots.length) {
+    Logger.log("Using Gemini plan. Attaching links...");
     return attachRelevantLink(planLines.join('\n'), tasks);
-  // fallback deterministic
+  }
+  
+  // fallback deterministic (使用新的 "append" Logic)
+  Logger.log(`Gemini plan failed or invalid. (Expected ${slots.length} lines, Got ${planLines.length}). Using fallback micro-task assigner.`);
   return assignMicroTasksToSlots(slots, tasks).join('\n');
 }
 
-// ==== Main autoTrello Scheduler ====
+// ==== MODIFIED: Main autoTrello Scheduler (Retry logic) ====
 function autoTrello() {
   var today = new Date();
   var formattedDate = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy/MM/dd');
   var dayOfWeek = today.getDay();
   var dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  
   if (dayOfWeek === 0 || dayOfWeek === 6) {
     Logger.log("Today is weekend, autoTrello does not execute.");
     return;
   }
-  var tasks = fetchTasksFromNoteAPI(3, 'in-progress'); // 不包 tags param
+
+  // **MODIFICATION**: Retry logic if no tasks are found
+  let daysToFetch = 3; // Start with 3 days
+  const maxFetchDays = 10; // Safety break after 10 days
+  var tasks = [];
+
+  while (tasks.length === 0 && daysToFetch <= maxFetchDays) {
+    Logger.log(`Fetching tasks for the last ${daysToFetch} days...`);
+    tasks = fetchTasksFromNoteAPI(daysToFetch, 'all'); // 不包 tags param
+
+    if (tasks.length === 0) {
+      Logger.log(`No API notes found for ${daysToFetch} days. Trying ${daysToFetch + 1} days...`);
+      daysToFetch++;
+      // Optional: add a small delay if API rate limit is a concern
+      // Utilities.sleep(1000); 
+    }
+  }
+
+  // After loop, check if tasks are still empty
   if (tasks.length === 0) {
-    Logger.log("No API notes today. autoTrello ends.");
+    Logger.log(`No API notes found even after checking ${maxFetchDays} days. autoTrello ends.`);
+    // You could send an alert here if needed
+    // if (SEND_MSG_URL) SEND_MSG(`autoTrello Alert: No notes found in the last ${maxFetchDays} days.`);
     return;
   }
+  
+  Logger.log(`Successfully fetched ${tasks.length} notes from the last ${daysToFetch} days.`);
+  // End of modification
+
   var hourlyPlan = generateHourlyPlanAll(tasks, dayOfWeek);
+  
   var text = `
 **${formattedDate} (${dayNames[dayOfWeek]})**
 - ---
