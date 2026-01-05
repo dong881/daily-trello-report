@@ -1,16 +1,20 @@
 /*********************************
- * Multi-API + Smart Linking + Periodic Slot
+ * Multi-API + Smart Linking + Graduate Student Logic
  * Language: Apps Script (GAS JavaScript)
- * Version: 2.5 (Bubble List Format Update)
+ * Version: 8.0 (Unified Date + Debug Log + Clean URL)
  *********************************/
 
 // ==== Script Properties ====
-const TRELLO_API_KEY          = getRequiredProperty("TRELLO_API_KEY");
-const TRELLO_API_TOKEN        = getRequiredProperty("TRELLO_API_TOKEN");
-const TRELLO_COMMENT_BASE_URL = getRequiredProperty("TRELLO_COMMENT_BASE_URL");
-const GEMINI_API_TOKEN        = getRequiredProperty("GEMINI_API_KEY");
+const TRELLO_API_KEY          = getRequiredProperty("TRELLO_API_KEY").replace(/\s/g, '').trim();
+const TRELLO_API_TOKEN        = getRequiredProperty("TRELLO_API_TOKEN").replace(/\s/g, '').trim();
+const TRELLO_COMMENT_BASE_URL = getRequiredProperty("TRELLO_COMMENT_BASE_URL").trim();
+const GEMINI_API_TOKEN        = getRequiredProperty("GEMINI_API_KEY").trim();
 const SEND_MSG_URL            = getOptionalProperty("SEND_MSG_URL");
 const MING_NOTE_API_BASE      = "https://ming-note.vercel.app/api/daily-report";
+
+// ==== GitHub Configuration for Future Notes ====
+const GITHUB_REPO_URL         = "https://github.com/bmw-ece-ntust/ming-note/blob/ming-v1.0.0/";
+const MEETING_MINUTES_PATH    = "notes/Meeting-Minutes/";
 
 // ==== Periodic Meeting/Slot Config ====
 const LAB_MEETING_DAY     = 3; // Wednesday
@@ -18,6 +22,9 @@ const LAB_MEETING_START   = "09:00";
 const LAB_MEETING_END     = "11:00";
 const labMeetingStart     = 9 * 60;
 const labMeetingEnd       = 11 * 60;
+
+// Bi-weekly Logic: 1 = Odd Weeks, 0 = Even Weeks
+const LAB_MEETING_WEEK_PARITY = 0; 
 
 const PROF_RAY_MEETING_DAY = 1; // Monday
 const PROF_RAY_MEETING_START_MINS = 14 * 60;
@@ -46,18 +53,40 @@ function getOptionalProperty(key) {
   return PropertiesService.getScriptProperties().getProperty(key);
 }
 
-// ==== MODIFIED: Fetch Daily Report Notes from API (with emoji filter) ====
+// ==== Util: Date Helper for Bi-weekly Logic ====
+function getWeekNumber(d) {
+  // Clone date to avoid mutating the unified date object
+  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  var weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return weekNo;
+}
+
+// ==== Util: GitHub Slugify ====
+function githubSlugify(text) {
+  if (!text) return "";
+  return text.toLowerCase()
+    .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '') 
+    .replace(/[^a-z0-9 -]/g, '') 
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
+// ==== Util: String Normalizer ====
+function normalizeString(str) {
+  return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+// ==== Fetch Daily Report Notes from API ====
 function fetchTasksFromNoteAPI(days = 3, status = "all", tags = null) {
   let url = `${MING_NOTE_API_BASE}?days=${days}`;
-  console.log(url);
   if (status !== 'all') url += `&status=${status}`;
   if (tags && tags.length) url += `&tags=${encodeURIComponent(tags.join(','))}`;
   try {
     let response = UrlFetchApp.fetch(url);
     let data = JSON.parse(response.getContentText());
     if (data.success && Array.isArray(data.data)) {
-      
-      // **MODIFICATION**: Regex to remove common emojis
       const emojiRegex = /([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g;
 
       return data.data
@@ -68,22 +97,15 @@ function fetchTasksFromNoteAPI(days = 3, status = "all", tags = null) {
             summary: note.metadata.summary || "No summary",
             link: note.noteLink || "",
             sections: note.sections || [],
-            tags: note.metadata.tags || []
+            tags: note.metadata.tags || [] 
           };
-          
           if (base.sections.length) {
             base.sections = base.sections.map(s => {
-              // **MODIFICATION**: Clean emojis from section links
               let cleanedLink = s.link || base.link;
               if (cleanedLink) {
-                cleanedLink = cleanedLink.replace(emojiRegex, '');
-                // Also remove hyphen after hash, e.g. #📋-overview -> #-overview -> #overview
-                cleanedLink = cleanedLink.replace(/#-/g, '#');
+                cleanedLink = cleanedLink.replace(emojiRegex, '').replace(/#-/g, '#');
               }
-              return {
-                title: s.title || "",
-                link: cleanedLink // Use the cleaned link
-              };
+              return { title: s.title || "", link: cleanedLink };
             });
           }
           return base;
@@ -103,22 +125,31 @@ function minutesToHHMM(mins) {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 }
 
-// ==== Daily Slots ====
-function generateDailySlots(todayDayOfWeek) {
+// ==== Daily Slots (Even Weeks Logic) ====
+function generateDailySlots(today) {
+  const dayOfWeek = today.getDay();
   const slots = [];
   const start = 9 * 60, end = 17 * 60;
   const lunchStart = 12 * 60, lunchEnd = 13 * 60;
+  
+  const currentWeekNum = getWeekNumber(today);
+  const isLabMeetingWeek = (currentWeekNum % 2 === LAB_MEETING_WEEK_PARITY);
+
+  Logger.log(`[Slot Gen] Week: ${currentWeekNum}, Lab Meeting: ${isLabMeetingWeek}`);
+
   let t = start;
   while (t < end) {
     if (t === lunchStart) {
       slots.push({ startMins: lunchStart, endMins: lunchEnd, display: "Lunch Break" });
       t = lunchEnd; continue;
     }
-    if (todayDayOfWeek === LAB_MEETING_DAY && t === labMeetingStart) {
-      slots.push({ startMins: labMeetingStart, endMins: labMeetingEnd, display: "BMW lab meeting" });
-      t = labMeetingEnd; continue;
+    if (dayOfWeek === LAB_MEETING_DAY && t === labMeetingStart) {
+      if (isLabMeetingWeek) {
+        slots.push({ startMins: labMeetingStart, endMins: labMeetingEnd, display: "BMW lab meeting" });
+        t = labMeetingEnd; continue;
+      }
     }
-    if (todayDayOfWeek === PROF_RAY_MEETING_DAY && t === PROF_RAY_MEETING_START_MINS) {
+    if (dayOfWeek === PROF_RAY_MEETING_DAY && t === PROF_RAY_MEETING_START_MINS) {
       slots.push({
         startMins: PROF_RAY_MEETING_START_MINS,
         endMins: PROF_RAY_MEETING_END_MINS,
@@ -132,22 +163,21 @@ function generateDailySlots(todayDayOfWeek) {
   return slots;
 }
 
-// ==== Micro-task + Smart Linking Fallback ====
-// 產生 micro-tasks (含筆記本、含章節); 為 output 搜尋對應 link。
+// ==== Fallback Logic ====
 function buildMicroTasksFromAPI(notes) {
   let microTasks = [];
   notes.forEach(note => {
     if (note.sections && note.sections.length > 0) {
       note.sections.forEach(section => {
         microTasks.push({
-          text: `${section.title} of ${note.title}`,
+          text: `[Update] ${section.title} (${note.title})`,
           link: section.link,
           match: [section.title, note.title]
         });
       });
     } else {
       microTasks.push({
-        text: `Read "${note.title}" content`,
+        text: `[Read] ${note.title}`,
         link: note.link,
         match: [note.title]
       });
@@ -156,258 +186,177 @@ function buildMicroTasksFromAPI(notes) {
   return microTasks;
 }
 
-// ==== MODIFIED: attachRelevantLink (Append link at the end) ====
-// 核心：match output to optimal link（LLM或fallback都用這個包）
-function attachRelevantLink(planText, notes) {
-  // 1. 建立所有 section 和 note 連結的 quick 查表
+// ==== Link Matching Logic V3 ====
+function attachRelevantLink(planText, notes, today) {
+  // 1. Prepare candidates
   let candidates = [];
   notes.forEach(note => {
-    // 優先加入 Sections
+    if (note.title && note.link) {
+      candidates.push({ title: note.title, link: note.link, isSection: false });
+    }
     if (note.sections && note.sections.length) {
       note.sections.forEach(sec => {
-        if (sec.title && sec.link) { // 確保有標題和連結
-          candidates.push({ title: sec.title, link: sec.link });
+        if (sec.title) {
+          let deepLink = sec.link; 
+          if (!deepLink) {
+             deepLink = note.link + "#" + githubSlugify(sec.title);
+          }
+          candidates.push({ title: sec.title, link: deepLink, isSection: true });
         }
       });
     }
-    // 加入 Note 本身 (作為 fallback)
-    if (note.title && note.link) {
-      candidates.push({ title: note.title, link: note.link });
-    }
   });
 
-  // 2. 依標題長度排序 (最長的優先匹配，以提高準確性)
   candidates.sort((a, b) => b.title.length - a.title.length);
 
-  // 3. 處理每一行 plan
   return planText.split('\n').map(line => {
     let trimmedLine = line.trim();
-    
-    // 只處理 "HH:MM~HH:MM ......" 類型的行
-    if (!trimmedLine.match(/^\d{2}:\d{2}~\d{2}:\d{2}/)) {
-      return line; // 非任務行 (例如標題或空行)
-    }
+    if (!trimmedLine.match(/^\d{2}:\d{2}~\d{2}:\d{2}/)) return line;
+    if (trimmedLine.match(/\[.*?\]\(.*?\)/)) return line; 
 
-    // 檢查是否已經有 [Link](...)
-    if (trimmedLine.match(/\[.*?\]\(.*?\)/)) {
-      return line; // 已經有連結，不再處理
+    // Future Note Logic
+    if (trimmedLine.includes("Prof. Ray") || trimmedLine.includes(PROF_RAY_MEETING_DISPLAY)) {
+      const weekNum = getWeekNumber(today); // Use unified date
+      const yyyymmdd = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyyMMdd');
+      const futureLink = `${GITHUB_REPO_URL}${MEETING_MINUTES_PATH}week${weekNum}-${yyyymmdd}.md`;
+      return `${trimmedLine} [Link](${futureLink})`;
     }
     
-    // 檢查是否為固定行程 (e.g., Lunch, Meeting) 或空行
-    if (!trimmedLine.match(/^\d{2}:\d{2}~\d{2}:\d{2}\s+.+/)) {
-        return line; // 空的 slot，不用加 link
-    }
-
-    // 尋找最匹配的 candidate
+    // Fuzzy Matching
+    const normalizedLine = normalizeString(trimmedLine);
     for (let cand of candidates) {
-      // 檢查標題是否存在於行內 (不分大小寫)
-      if (cand.title && cand.title.length > 1 && trimmedLine.toLowerCase().includes(cand.title.toLowerCase())) {
-        // 找到了！在行尾加上連結
-        // trim() 確保沒有多餘的尾隨空格
-        return `${line.trim()} [Link](${cand.link})`;
+      const normalizedTitle = normalizeString(cand.title);
+      if (cand.title.length > 3 && normalizedLine.includes(normalizedTitle)) {
+        return `${trimmedLine} [Link](${cand.link})`;
       }
     }
-    
-    // 沒找到匹配的 candidate
     return line;
   }).join('\n');
 }
 
 
-// ==== MODIFIED: generatePlanViaGeminiAll (Objective Prompt) ====
+// ==== CORE: Generate Plan via Gemini ====
 function generatePlanViaGeminiAll(tasks, slots) {
   if (!GEMINI_API_TOKEN) return null;
   
-  const slotTemplate = slots.map(slot =>
-    `${minutesToHHMM(slot.startMins)}~${minutesToHHMM(slot.endMins)}${slot.display ? " " + slot.display : ""}`
+  const slotTemplate = slots.map((slot, index) =>
+    `Slot ${index + 1}: ${minutesToHHMM(slot.startMins)}~${minutesToHHMM(slot.endMins)}${slot.display ? " (FIXED_EVENT: " + slot.display + ")" : " (EMPTY)"}`
   ).join("\n");
 
   const taskList = tasks.map(t => {
-    let noteInfo = `Note Title: ${t.title}\nNote Summary: ${t.summary}\nNote Link: ${t.link}`;
+    let noteInfo = `[Note] Title: ${t.title} | Tags: ${t.tags.join(", ")} | Summary: ${t.summary}`;
     if (t.sections && t.sections.length > 0) {
-      const sectionList = t.sections.map(s => `- Section: "${s.title}" (Link: ${s.link})`).join("\n");
-      noteInfo += `\nAvailable Sections:\n${sectionList}`;
+      const sectionList = t.sections.map(s => `  - Sub-topic: "${s.title}"`).join("\n");
+      noteInfo += `\n${sectionList}`;
     }
     return noteInfo;
   }).join("\n\n");
 
-  // **MODIFICATION**: New objective prompt
   const prompt = `
-You are a highly efficient scheduling assistant. Your task is to plan a day for an engineering graduate student using simple, direct, and objective statements.
+You are a daily scheduler.
 
-**Crucial Instruction 1: Task Description:**
-- You MUST use actionable, direct statements. (e.g., "Draft the...", "Review the...", "Continue outlining...").
-- DO NOT use the first person (e.g., "I will...", "I'll...", "My plan is...").
-- Your goal is to create a logical flow for the day, where tasks build upon each other.
-- Base these tasks primarily on the **Available Sections** provided for each note.
+**INSTRUCTIONS:**
+1. Fill exactly ${slots.length} time slots based on the "Time Slots" list below.
+2. **Fixed Events:** If a slot says "(FIXED_EVENT: X)", output "HH:MM~HH:MM X" (Do NOT include the word FIXED or parentheses).
+3. **Empty Slots:** Fill with a task from "Task List".
+4. **Action Tags:** Use [Update], [Refactor], [Analyze], [Debug], [Implement], [Optimize], [Plan]. Avoid [Review].
+5. **Wording:** Use the **EXACT** Note Title or Sub-topic Title in your output to ensure linking works.
 
-- GOOD: "09:00~10:00 Draft the 'research motivation' section for the thesis."
-- GOOD: "10:00~11:00 Outline the 'research challenges' based on the completed motivation."
-- BAD: "09:00~10:00 research motivation" (This is too short)
-- BAD: "09:00~10:00 I will draft the research motivation." (This is first-person)
-
-**Crucial Instruction 2: Strict Formatting (Absolutely Required):**
-You MUST output exactly one line for *every* slot provided in the "Slot list." The total number of output lines MUST equal the total number of slot lines.
-- Keep fixed events (meetings, lunch) exactly as they are.
-- If there are not enough API items/sections to fill, you MUST still output the time range for that slot, but leave the description blank. (e.g., "16:00~17:00")
-- DO NOT add any extra text, headers, summaries, or conversational lines before or after the plan. Your output must start *immediately* with the first time slot.
-- Prohibited: Repeating content, placeholder words ('buffer', 'admin'), or summarizing lines.
-
-Slot list:
+**Time Slots:**
 ${slotTemplate}
 
-API items (Notes and their Available Sections):
+**Task List:**
 ${taskList}
 
-Now generate today's hourly plan, in ENGLISH, starting with the first slot.
-One line per slot, in order.
-Use the template:
-HH:MM~HH:MM [Direct, objective task for this hour]
-Or
-HH:MM~HH:MM [description of fixed event]
-Or
-HH:MM~HH:MM      (for empty slots need to merge with last slot time)
+**OUTPUT (Exactly ${slots.length} lines):**
   `.replace(/^\s+/gm, '');
 
-  const GEMINI_MODEL = "gemini-2.5-flash";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_TOKEN}`;
-  const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+  const modelsToTry = ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+
+  for (let model of modelsToTry) {
+    Logger.log(`Attempting to generate plan using model: ${model}...`);
+    let result = callGeminiAPI(model, prompt);
+    if (result) {
+      const lineCount = result.split('\n').filter(l => l.match(/^\d{2}:\d{2}/)).length;
+      if (lineCount >= slots.length) {
+         Logger.log(`Success with ${model}. Generated ${lineCount} lines.`);
+         return result;
+      }
+    }
+    Utilities.sleep(1000); 
+  }
+  return null;
+}
+
+function callGeminiAPI(modelName, promptText) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_TOKEN}`;
+  const payload = { 
+    contents: [{ role: "user", parts: [{ text: promptText }] }],
+    safetySettings: [
+      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+    ],
+    generationConfig: { temperature: 0.6, maxOutputTokens: 8192 }
+  };
   const options = { method: "post", contentType: "application/json", payload: JSON.stringify(payload), muteHttpExceptions: true };
-  
   try {
     const response = UrlFetchApp.fetch(url, options);
     const json = JSON.parse(response.getContentText());
-    const planText = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return planText.trim();
+    if (json.error) return null;
+    return json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
   } catch (err) {
-    // Log the actual response text if it's not JSON
-    if (err.message && err.message.includes("not valid JSON")) {
-        Logger.log("Gemini API did not return valid JSON. Response text: " + err);
-    } else {
-        Logger.log("Error calling Gemini: " + err);
-    }
     return null;
   }
 }
 
-// ==== MODIFIED: assignMicroTasksToSlots (Append link at the end) ====
-function assignMicroTasksToSlots(slots, notes) {
-  const microTasks = buildMicroTasksFromAPI(notes);
-  const assigned = [];
-  let poolIdx = 0;
-  
-  for (let i = 0; i < slots.length; i++) {
-    const slot = slots[i];
-    if (slot.display) {
-      assigned.push({ time: `${minutesToHHMM(slot.startMins)}~${minutesToHHMM(slot.endMins)}`, desc: slot.display, link: null });
-      continue;
-    }
-    if (poolIdx >= microTasks.length) {
-      assigned.push({ time: `${minutesToHHMM(slot.startMins)}~${minutesToHHMM(slot.endMins)}`, desc: "" });
-    } else {
-      const task = microTasks[poolIdx];
-      assigned.push({ 
-        time: `${minutesToHHMM(slot.startMins)}~${minutesToHHMM(slot.endMins)}`,
-        desc: task.text,
-        match: task.match,
-        link: task.link
-      });
-      poolIdx++;
-    }
-  }
-  
-  // 避免重複
-  const seen = {};
-  for (let i = 0; i < assigned.length; i++) {
-    if (assigned[i].desc && seen[assigned[i].desc]) {
-      assigned[i].desc += " (continue/refine)";
-    } else if (assigned[i].desc) {
-      seen[assigned[i].desc] = true;
-    }
-  }
-
-  // **MODIFICATION**: form lines (append link at the end)
-  return assigned.map(a => {
-    if (!a.desc) {
-      return a.time; // 空白時段
-    }
-    if (a.link) {
-      // 直接在後面加上 [Link]
-      return `${a.time} ${a.desc} [Link](${a.link})`;
-    }
-    // 沒有 link (例如固定行程)
-    return `${a.time} ${a.desc}`;
-  });
-}
-
-
-// ==== Compose the hourly plan: LLM then fallback + smart link + BUBBLE LIST FORMAT ====
-function generateHourlyPlanAll(tasks, todayDayOfWeek) {
-  const slots = generateDailySlots(todayDayOfWeek);
+// ==== Main Generation Flow ====
+function generateHourlyPlanAll(tasks, today) {
+  const slots = generateDailySlots(today);
   let planRaw = generatePlanViaGeminiAll(tasks, slots);
   let planLines = [];
   
   if (planRaw) {
-    planLines = planRaw.split('\n').filter(l => l.match(/^\d{2}:\d{2}~\d{2}:\d{2}/));
+    let cleanRaw = planRaw.replace(/\*\*/g, "").replace(/```/g, "").trim();
+    planLines = cleanRaw.split('\n').map(l => l.trim()).filter(l => l.match(/^\d{2}:\d{2}~\d{2}:\d{2}/)); 
   }
   
   let finalPlanLines = [];
-
-  // 若格式數目OK，進行智能連結
   if (planLines.length === slots.length) {
-    Logger.log("Using Gemini plan. Attaching links...");
-    // attachRelevantLink returns a single string, we split it back to array
-    const linkedText = attachRelevantLink(planLines.join('\n'), tasks);
+    // Pass 'today' for future note calculation
+    const linkedText = attachRelevantLink(planLines.join('\n'), tasks, today); 
     finalPlanLines = linkedText.split('\n');
   } else {
-    // fallback deterministic
-    Logger.log(`Gemini plan failed or invalid. Using fallback.`);
     finalPlanLines = assignMicroTasksToSlots(slots, tasks);
   }
-
-  // **IMPORTANT MODIFICATION**: Convert lines to Bubble List Format
-  // Add tab + bullet point to each line
   return finalPlanLines.map(line => `\t- ${line}`).join('\n');
 }
 
-// ==== MODIFIED: Main autoTrello Scheduler (Retry logic + Format) ====
+// ==== Main Execution Function ====
 function autoTrello() {
-  var today = new Date();
+  // UNIFIED DATE: Call new Date() once here and pass it down
+  const today = new Date(); 
+  
   var formattedDate = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy/MM/dd');
   var dayOfWeek = today.getDay();
   var dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    Logger.log("Today is weekend, autoTrello does not execute.");
-    return;
-  }
+  if (dayOfWeek === 0 || dayOfWeek === 6) { Logger.log("Weekend, skipping."); return; }
 
-  // **MODIFICATION**: Retry logic if no tasks are found
-  let daysToFetch = 3; // Start with 3 days
-  const maxFetchDays = 10; // Safety break after 10 days
+  let daysToFetch = 3; 
+  const maxFetchDays = 10;
   var tasks = [];
-
   while (tasks.length === 0 && daysToFetch <= maxFetchDays) {
-    Logger.log(`Fetching tasks for the last ${daysToFetch} days...`);
-    tasks = fetchTasksFromNoteAPI(daysToFetch, 'all'); // 不包 tags param
-
-    if (tasks.length === 0) {
-      Logger.log(`No API notes found for ${daysToFetch} days. Trying ${daysToFetch + 1} days...`);
-      daysToFetch++;
-    }
+    tasks = fetchTasksFromNoteAPI(daysToFetch, 'all'); 
+    if (tasks.length === 0) daysToFetch++;
   }
+  if (tasks.length === 0) return;
+  
+  // Pass 'today' to generation logic
+  var hourlyPlan = generateHourlyPlanAll(tasks, today); 
+  if (!hourlyPlan || hourlyPlan.length < 5) return;
 
-  // After loop, check if tasks are still empty
-  if (tasks.length === 0) {
-    Logger.log(`No API notes found even after checking ${maxFetchDays} days. autoTrello ends.`);
-    return;
-  }
-  
-  Logger.log(`Successfully fetched ${tasks.length} notes from the last ${daysToFetch} days.`);
-  
-  var hourlyPlan = generateHourlyPlanAll(tasks, dayOfWeek);
-  
-  // **MODIFICATION**: Use the exact requested text template
   var text = `
 **${formattedDate} (${dayNames[dayOfWeek]})**
 - ---
@@ -417,42 +366,24 @@ function autoTrello() {
 ${hourlyPlan}
 `;
 
+  // **DEBUG LOG: Print final message**
+  Logger.log("=== FINAL TRELLO MSG ===\n" + text);
+
   try {
-    var trelloUrl = 'https://api.trello.com/1/cards/CIIouy8k/actions/comments';
-    var payload = {
-      text: text,
-      key: TRELLO_API_KEY,
-      token: TRELLO_API_TOKEN
-    };
-    var options = {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(payload),
-      headers: { 'Accept': 'application/json' }
-    };
+    var safeKey = TRELLO_API_KEY.replace(/[^a-zA-Z0-9]/g, "");
+    var safeToken = TRELLO_API_TOKEN.replace(/[^a-zA-Z0-9]/g, "");
+    
+    // **FIXED URL**: Pure string
+    var trelloUrl = 'https://api.trello.com/1/cards/CIIouy8k/actions/comments?key=' + safeKey + '&token=' + safeToken;
+
+    var options = { method: 'post', contentType: 'application/json', payload: JSON.stringify({text: text}), headers: { 'Accept': 'application/json' } };
     var res = UrlFetchApp.fetch(trelloUrl, options);
-    Logger.log("Trello API response: " + res.getResponseCode());
+    Logger.log("Trello Response: " + res.getResponseCode());
     var jsonResponse = JSON.parse(res.getContentText());
-    var commentURL = TRELLO_COMMENT_BASE_URL + "#comment-" + jsonResponse.id;
-    // if (SEND_MSG_URL) SEND_MSG(commentURL);
-    Logger.log("Generated Comment URL: " + commentURL);
+    Logger.log("Comment URL: " + TRELLO_COMMENT_BASE_URL + "#comment-" + jsonResponse.id);
   } catch (error) {
     Logger.log("Error in autoTrello: " + error);
   }
 }
 
-// ==== Send Msg if set ====
-function SEND_MSG(MsgStr) {
-  if (!SEND_MSG_URL) {
-    Logger.log("SEND_MSG_URL not set. Skipped.");
-    return;
-  }
-  try {
-    var encodedMsg = encodeURIComponent(MsgStr);
-    var url = SEND_MSG_URL + encodedMsg;
-    UrlFetchApp.fetch(url);
-    Logger.log("Message sent: " + MsgStr);
-  } catch (error) {
-    Logger.log("Error in SEND_MSG: " + error);
-  }
-}
+function assignMicroTasksToSlots(slots, notes) { return slots.map(s => s.display ? `${minutesToHHMM(s.startMins)}~${minutesToHHMM(s.endMins)} ${s.display}` : `${minutesToHHMM(s.startMins)}~${minutesToHHMM(s.endMins)}`); }
