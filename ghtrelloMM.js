@@ -55,7 +55,7 @@ const SHORT_TERM_GOAL = `
 // ==========================================
 function mainDailyUpdate() {
   // UNIFIED DATE: Call new Date() once here and pass it down
-  const today = new Date(2026,0,5); 
+  const today = new Date(); 
   
   var formattedDate = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy/MM/dd');
   var dayOfWeek = today.getDay();
