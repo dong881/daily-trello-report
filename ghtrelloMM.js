@@ -288,7 +288,7 @@ function generateDailySlots(today) {
       t = lunchEnd; continue;
     }
     if (dayOfWeek === LAB_MEETING_DAY && t === labMeetingStart && isLabMeetingWeek) {
-      slots.push({ startMins: labMeetingStart, endMins: labMeetingEnd, display: "BMW lab meeting" });
+      slots.push({ startMins: labMeetingStart, endMins: labMeetingEnd, display: "BMW lab meeting -> [Link](https://github.com/bmw-ece-ntust/progress-plan/issues/439)" });
       t = labMeetingEnd; continue;
     }
     if (dayOfWeek === PROF_RAY_MEETING_DAY && t === PROF_RAY_MEETING_START_MINS) {
