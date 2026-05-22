@@ -29,24 +29,24 @@ const GITHUB_THESIS_REPO_URL  = "https://github.com/bmw-ece-ntust/ming-note/blob
 const MEETING_MINUTES_PATH    = "notes/Meeting-Minutes/";
 
 // ==== 4. Schedule & Meeting Config ====
-const LAB_MEETING_DAY     = 3; // Wednesday
+const LAB_MEETING_DAY     = 4;
 const LAB_MEETING_START   = "09:00";
 const LAB_MEETING_END     = "11:00";
 const labMeetingStart     = 9 * 60;
 const labMeetingEnd       = 11 * 60;
 const LAB_MEETING_WEEK_PARITY = 0; // 0 = Even Weeks, 1 = Odd Weeks
 
-const PROF_RAY_MEETING_DAY = 1; // Monday (Trigger Day)
-const PROF_RAY_MEETING_START_MINS = 14 * 60;
-const PROF_RAY_MEETING_END_MINS = 15 * 60;
+const PROF_RAY_MEETING_DAY = 2; // Trigger Day
+const PROF_RAY_MEETING_START_MINS = 11 * 60;
+const PROF_RAY_MEETING_END_MINS = 12 * 60;
 const PROF_RAY_MEETING_DISPLAY = "Meeting with Prof. Ray to discuss the thesis";
 
 const SHORT_TERM_GOAL = `
 - Begin drafting the research motivation, challenges, and contributions of the thesis.
 - Milestone:
-  - Checkpoint 1: research motivation
-  - Checkpoint 2: research challenges
-  - Checkpoint 3: research contributions
+  - Checkpoint 1: edit motivation
+  - Checkpoint 2: edit challenges
+  - Checkpoint 3: edit contributions
 - Final deliverable: Installation manual by link.
 `;
 
@@ -103,20 +103,20 @@ ${hourlyPlan}
   postToGitHubIssue(MAIN_PROGRESS_ISSUE_ID, finalText);
 
   // (B) GitHub Issues - Thesis Log Sync (Issue #10) - TRIGGER CHECK
-  if (dayOfWeek === PROF_RAY_MEETING_DAY) {
-      Logger.log(">>> Triggering Meeting Day Sync (Issue #10)...");
-      const weekNum = getWeekNumber(today);
-      const yyyymmddForLink = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyyMMdd');
+  // if (dayOfWeek === PROF_RAY_MEETING_DAY) {
+  //     Logger.log(">>> Triggering Meeting Day Sync (Issue #10)...");
+  //     const weekNum = getWeekNumber(today);
+  //     const yyyymmddForLink = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyyMMdd');
       
-      // Full URL construction
-      const meetingFullUrl = `${GITHUB_THESIS_REPO_URL}${MEETING_MINUTES_PATH}week${weekNum}-${yyyymmddForLink}.md`;
+  //     // Full URL construction
+  //     const meetingFullUrl = `${GITHUB_THESIS_REPO_URL}${MEETING_MINUTES_PATH}week${weekNum}-${yyyymmddForLink}.md`;
       
-      // Construct Formatted Message for Issue #10
-      const issue10Content = `## Week ${weekNum} (${formattedDate}-${dayNames[dayOfWeek]}) Meeting minute\n\n -> ${meetingFullUrl}`;
+  //     // Construct Formatted Message for Issue #10
+  //     const issue10Content = `## Week ${weekNum} (${formattedDate}-${dayNames[dayOfWeek]}) Meeting minute\n\n -> ${meetingFullUrl}`;
 
-      // Post to Issue #10
-      postToGitHubIssue(THESIS_LOG_ISSUE_ID, issue10Content);
-  }
+  //     // Post to Issue #10
+  //     postToGitHubIssue(THESIS_LOG_ISSUE_ID, issue10Content);
+  // }
 
   // (C) Trello - Backup (Independent Function)
   sendToTrello(finalText);
@@ -407,4 +407,40 @@ function generateHourlyPlanAll(tasks, today) {
     : slots.map(s => s.display ? `${minutesToHHMM(s.startMins)}~${minutesToHHMM(s.endMins)} ${s.display}` : `${minutesToHHMM(s.startMins)}~${minutesToHHMM(s.endMins)}`);
     
   return finalLines.map(line => `\t- ${line}`).join('\n');
+}
+
+// ==========================================
+// ====    INDEPENDENT TRIGGER FUNCTIONS ====
+// ==========================================
+
+/**
+ * 獨立觸發功能：建立並同步 Meeting Page (Thesis Log) 到 GitHub Issue #10
+ * 建議在 Apps Script 中設定獨立的「時間驅動觸發器 (Time-driven trigger)」來執行此 Function。
+ */
+function triggerThesisMeetingPage() {
+  const today = new Date(); 
+  const dayOfWeek = today.getDay();
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  
+  // 安全機制：確保只有在 PROF_RAY_MEETING_DAY (預設為 2，即星期二) 才執行
+  // 如果你希望觸發器設定在任何時間都能無條件執行，可以將這段 if 判斷註解掉
+  if (dayOfWeek !== PROF_RAY_MEETING_DAY) {
+    Logger.log(`Today is not Prof. Ray meeting day (Day ${PROF_RAY_MEETING_DAY}). Skipping Issue #10 creation.`);
+    return;
+  }
+
+  Logger.log(">>> Triggering Meeting Day Sync (Issue #10)...");
+  
+  const formattedDate = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy/MM/dd');
+  const yyyymmddForLink = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyyMMdd');
+  const weekNum = getWeekNumber(today);
+  
+  // Construct GitHub Markdown Link for the Meeting Minute
+  const meetingFullUrl = `${GITHUB_THESIS_REPO_URL}${MEETING_MINUTES_PATH}week${weekNum}-${yyyymmddForLink}.md`;
+  
+  // Construct Formatted Message for Issue #10
+  const issue10Content = `## Week ${weekNum} (${formattedDate}-${dayNames[dayOfWeek]}) Meeting minute\n\n -> ${meetingFullUrl}`;
+
+  // Post to Issue #10
+  postToGitHubIssue(THESIS_LOG_ISSUE_ID, issue10Content);
 }
