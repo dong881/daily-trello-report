@@ -1,7 +1,7 @@
 /*********************************
  * Multi-API + Smart Linking + Graduate Student Logic
  * Language: Apps Script (GAS JavaScript)
- * Version: 12.0 (Formatted Issue #10 Sync)
+ * Version: 12.1 (Added English Enforcement & Fallback Logs)
  *********************************/
 
 // ==== 1. Script Properties (Secrets) ====
@@ -42,11 +42,11 @@ const PROF_RAY_MEETING_END_MINS = 12 * 60;
 const PROF_RAY_MEETING_DISPLAY = "Meeting with Prof. Ray to discuss the thesis";
 
 const SHORT_TERM_GOAL = `
-- Begin drafting the research motivation, challenges, and contributions of the thesis.
+- Finish thesis slide and book.
 - Milestone:
-  - Checkpoint 1: edit motivation
-  - Checkpoint 2: edit challenges
-  - Checkpoint 3: edit contributions
+  - Checkpoint 1: Thesis Slide
+  - Checkpoint 2: Thesis Book
+  - Checkpoint 3: Experimental Results
 - Final deliverable: Installation manual by link.
 `;
 
@@ -102,22 +102,6 @@ ${hourlyPlan}
   // (A) GitHub Issues - Main Progress Report (Issue #374)
   postToGitHubIssue(MAIN_PROGRESS_ISSUE_ID, finalText);
 
-  // (B) GitHub Issues - Thesis Log Sync (Issue #10) - TRIGGER CHECK
-  // if (dayOfWeek === PROF_RAY_MEETING_DAY) {
-  //     Logger.log(">>> Triggering Meeting Day Sync (Issue #10)...");
-  //     const weekNum = getWeekNumber(today);
-  //     const yyyymmddForLink = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyyMMdd');
-      
-  //     // Full URL construction
-  //     const meetingFullUrl = `${GITHUB_THESIS_REPO_URL}${MEETING_MINUTES_PATH}week${weekNum}-${yyyymmddForLink}.md`;
-      
-  //     // Construct Formatted Message for Issue #10
-  //     const issue10Content = `## Week ${weekNum} (${formattedDate}-${dayNames[dayOfWeek]}) Meeting minute\n\n -> ${meetingFullUrl}`;
-
-  //     // Post to Issue #10
-  //     postToGitHubIssue(THESIS_LOG_ISSUE_ID, issue10Content);
-  // }
-
   // (C) Trello - Backup (Independent Function)
   sendToTrello(finalText);
 }
@@ -126,11 +110,6 @@ ${hourlyPlan}
 // ====    SENDER FUNCTIONS (Modularized)====
 // ==========================================
 
-/**
- * 模組化 GitHub 發送函式
- * @param {string} issueId - 目標 Issue 編號 (例如 "374" 或 "10")
- * @param {string} bodyContent - 留言內容
- */
 function postToGitHubIssue(issueId, bodyContent) {
   Logger.log(`>>> Starting GitHub Push to Issue #${issueId}...`);
   const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO_NAME}/issues/${issueId}/comments`;
@@ -162,9 +141,6 @@ function postToGitHubIssue(issueId, bodyContent) {
   }
 }
 
-/**
- * 發送訊息到 Trello Card (獨立功能)
- */
 function sendToTrello(text) {
   Logger.log(">>> Starting Trello Push...");
   try {
@@ -194,22 +170,16 @@ function sendToTrello(text) {
   }
 }
 
-
 // ==========================================
 // ====    CORE GENERATION LOGIC         ====
 // ==========================================
 
-// ==== Util: Script Properties ====
 function getRequiredProperty(key) {
   var value = PropertiesService.getScriptProperties().getProperty(key);
   if (!value) throw new Error("Missing Property: " + key);
   return value;
 }
-function getOptionalProperty(key) {
-  return PropertiesService.getScriptProperties().getProperty(key);
-}
 
-// ==== Util: Logic Helpers ====
 function getWeekNumber(d) {
   d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
@@ -234,7 +204,6 @@ function minutesToHHMM(mins) {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 }
 
-// ==== Fetch Data ====
 function fetchTasksFromNoteAPI(days = 3, status = "all", tags = null) {
   let url = `${MING_NOTE_API_BASE}?days=${days}`;
   if (status !== 'all') url += `&status=${status}`;
@@ -271,7 +240,6 @@ function fetchTasksFromNoteAPI(days = 3, status = "all", tags = null) {
   }
 }
 
-// ==== Slots Generation ====
 function generateDailySlots(today) {
   const dayOfWeek = today.getDay();
   const slots = [];
@@ -301,7 +269,6 @@ function generateDailySlots(today) {
   return slots;
 }
 
-// ==== Link Matching ====
 function attachRelevantLink(planText, notes, today) {
   let candidates = [];
   notes.forEach(note => {
@@ -339,9 +306,11 @@ function attachRelevantLink(planText, notes, today) {
   }).join('\n');
 }
 
-// ==== Gemini Generation ====
 function generatePlanViaGeminiAll(tasks, slots) {
-  if (!GEMINI_API_TOKEN) return null;
+  if (!GEMINI_API_TOKEN) {
+    Logger.log("❌ GEMINI_API_TOKEN is missing.");
+    return null;
+  }
   
   const slotTemplate = slots.map((s, i) =>
     `Slot ${i + 1}: ${minutesToHHMM(s.startMins)}~${minutesToHHMM(s.endMins)}${s.display ? " (FIXED_EVENT: " + s.display + ")" : " (EMPTY)"}`
@@ -353,6 +322,7 @@ function generatePlanViaGeminiAll(tasks, slots) {
     return info;
   }).join("\n\n");
 
+  // 修改：加入英文強制約束
   const prompt = `
 You are a daily scheduler.
 **INSTRUCTIONS:**
@@ -361,6 +331,7 @@ You are a daily scheduler.
 3. **Empty Slots:** Fill with a task from "Task List".
 4. **Action Tags:** Use [Update], [Refactor], [Analyze], [Debug], [Implement], [Optimize], [Plan].
 5. **Wording:** Use the **EXACT** Note Title or Sub-topic Title.
+6. **LANGUAGE:** YOU MUST OUTPUT THE ENTIRE PLAN IN ENGLISH ONLY.
 
 **Time Slots:**
 ${slotTemplate}
@@ -373,10 +344,22 @@ ${taskList}
 
   const models = ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
   for (let m of models) {
+    Logger.log(`>>> Attempting Gemini Generation with model: ${m}...`);
     let res = callGeminiAPI(m, prompt);
-    if (res && res.split('\n').filter(l => l.match(/^\d{2}:\d{2}/)).length >= slots.length) return res;
+    
+    if (res) {
+      let validLines = res.split('\n').filter(l => l.match(/^\d{2}:\d{2}/));
+      if (validLines.length >= slots.length) {
+        Logger.log(`✅ Success: Generated ${validLines.length} slots using ${m}`);
+        return res;
+      } else {
+         Logger.log(`⚠️ Warning: Model ${m} output incomplete slots (${validLines.length}/${slots.length}). Retrying next model...`);
+      }
+    }
     Utilities.sleep(1000);
   }
+  
+  Logger.log("❌ Error: All Gemini models failed to generate a valid and complete plan.");
   return null;
 }
 
@@ -387,9 +370,24 @@ function callGeminiAPI(model, prompt) {
     generationConfig: { temperature: 0.6, maxOutputTokens: 8192 }
   };
   try {
-    const res = UrlFetchApp.fetch(url, { method: "post", contentType: "application/json", payload: JSON.stringify(payload), muteHttpExceptions: true });
+    const res = UrlFetchApp.fetch(url, { 
+      method: "post", 
+      contentType: "application/json", 
+      payload: JSON.stringify(payload), 
+      muteHttpExceptions: true 
+    });
+    
+    const statusCode = res.getResponseCode();
+    if (statusCode !== 200) {
+      Logger.log(`❌ Gemini HTTP Error (${model}): ${statusCode} - ${res.getContentText()}`);
+      return null;
+    }
+    
     return JSON.parse(res.getContentText())?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-  } catch (e) { return null; }
+  } catch (e) { 
+    Logger.log(`❌ Gemini Exception (${model}): ${e.toString()}`);
+    return null; 
+  }
 }
 
 function generateHourlyPlanAll(tasks, today) {
@@ -402,9 +400,15 @@ function generateHourlyPlanAll(tasks, today) {
       .map(l => l.trim()).filter(l => l.match(/^\d{2}:\d{2}~\d{2}:\d{2}/));
   }
   
-  let finalLines = (planLines.length === slots.length) 
-    ? attachRelevantLink(planLines.join('\n'), tasks, today).split('\n')
-    : slots.map(s => s.display ? `${minutesToHHMM(s.startMins)}~${minutesToHHMM(s.endMins)} ${s.display}` : `${minutesToHHMM(s.startMins)}~${minutesToHHMM(s.endMins)}`);
+  // 加入 Fallback 的日誌判斷
+  let finalLines;
+  if (planLines.length === slots.length) {
+    Logger.log("✅ Successfully mapped AI plan to daily slots.");
+    finalLines = attachRelevantLink(planLines.join('\n'), tasks, today).split('\n');
+  } else {
+    Logger.log("⚠️ Fallback Triggered: Mapping default time slots because AI generation was invalid/incomplete.");
+    finalLines = slots.map(s => s.display ? `${minutesToHHMM(s.startMins)}~${minutesToHHMM(s.endMins)} ${s.display}` : `${minutesToHHMM(s.startMins)}~${minutesToHHMM(s.endMins)}`);
+  }
     
   return finalLines.map(line => `\t- ${line}`).join('\n');
 }
@@ -413,17 +417,11 @@ function generateHourlyPlanAll(tasks, today) {
 // ====    INDEPENDENT TRIGGER FUNCTIONS ====
 // ==========================================
 
-/**
- * 獨立觸發功能：建立並同步 Meeting Page (Thesis Log) 到 GitHub Issue #10
- * 建議在 Apps Script 中設定獨立的「時間驅動觸發器 (Time-driven trigger)」來執行此 Function。
- */
 function triggerThesisMeetingPage() {
   const today = new Date(); 
   const dayOfWeek = today.getDay();
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   
-  // 安全機制：確保只有在 PROF_RAY_MEETING_DAY (預設為 2，即星期二) 才執行
-  // 如果你希望觸發器設定在任何時間都能無條件執行，可以將這段 if 判斷註解掉
   if (dayOfWeek !== PROF_RAY_MEETING_DAY) {
     Logger.log(`Today is not Prof. Ray meeting day (Day ${PROF_RAY_MEETING_DAY}). Skipping Issue #10 creation.`);
     return;
@@ -435,12 +433,8 @@ function triggerThesisMeetingPage() {
   const yyyymmddForLink = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyyMMdd');
   const weekNum = getWeekNumber(today);
   
-  // Construct GitHub Markdown Link for the Meeting Minute
   const meetingFullUrl = `${GITHUB_THESIS_REPO_URL}${MEETING_MINUTES_PATH}week${weekNum}-${yyyymmddForLink}.md`;
-  
-  // Construct Formatted Message for Issue #10
   const issue10Content = `## Week ${weekNum} (${formattedDate}-${dayNames[dayOfWeek]}) Meeting minute\n\n -> ${meetingFullUrl}`;
 
-  // Post to Issue #10
   postToGitHubIssue(THESIS_LOG_ISSUE_ID, issue10Content);
 }
